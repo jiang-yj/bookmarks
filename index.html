@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的网址收藏夹</title>
+<style>
+/* ============================================================
+   一、基础重置与全局样式
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  /* 暗黑护眼风液态玻璃统一变量（深色低饱和，弱光下不刺眼，方便统一调整） */
+  --glass-bg: rgba(255, 255, 255, .07);
+  --glass-bg-strong: rgba(255, 255, 255, .13);
+  --glass-border: rgba(255, 255, 255, .14);
+  --text-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+               "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: #fff;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ============================================================
+   二、背景层：默认灰黑暗黑护眼底；上传壁纸后切换为壁纸
+   ============================================================ */
+.bg {
+  position: fixed; inset: 0; z-index: -2;
+  /* 默认皮肤：灰黑色静态渐变 + 左上角一抹极淡冷光，低饱和护眼 */
+  background:
+    radial-gradient(1100px 760px at 18% -12%, rgba(130, 142, 175, .10), transparent 60%),
+    linear-gradient(145deg, #282c34 0%, #181b21 48%, #20242b 100%);
+}
+.bg.has-photo {
+  /* 用户上传壁纸后：覆盖暗色底，全屏居中铺满 */
+  background-size: cover;
+  background-position: center;
+}
+/* 仅在使用壁纸时叠加压暗遮罩，保证任意壁纸上文字对比度 */
+.bg-overlay {
+  position: fixed; inset: 0; z-index: -1;
+  background: transparent;
+}
+.bg.has-photo + .bg-overlay {
+  background: linear-gradient(180deg, rgba(8, 10, 16, .28), rgba(8, 10, 16, .62));
+}
+
+/* ============================================================
+   三、液态玻璃通用类（毛玻璃模糊 + 高光边框 + 投影）
+   ============================================================ */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .15),
+              inset 0 1px 0 rgba(255, 255, 255, .28);
+}
+
+/* ============================================================
+   四、顶部工具栏（毛玻璃吸顶栏）
+   ============================================================ */
+.topbar {
+  position: sticky; top: 0; z-index: 30;
+  background: rgba(14, 16, 22, .55);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+}
+.topbar-inner {
+  max-width: 1100px; margin: 0 auto;
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+
+/* 左上角站点名称：点击可就地改名，悬停给出轻微反馈与铅笔提示 */
+.brand {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 700; letter-spacing: 1px;
+  text-shadow: var(--text-shadow);
+  padding: 5px 10px; border-radius: 10px;
+  cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+.brand:hover { background: rgba(255, 255, 255, .08); }
+.brand-hint { font-size: 12px; opacity: 0; transition: opacity .15s; }
+.brand:hover .brand-hint { opacity: .65; }
+.brand-input {
+  width: 210px; max-width: 46vw;
+  font: inherit; letter-spacing: normal; color: #fff;
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .45);
+  border-radius: 8px; padding: 3px 8px; outline: 0;
+}
+
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+/* “更多操作”折叠层：默认收起，点击开关按钮后向下展开 */
+.more-wrap { position: relative; }
+.more-panel {
+  position: absolute; right: 0; top: calc(100% + 10px);
+  display: flex; gap: 8px; padding: 10px; border-radius: 16px;
+  z-index: 40;
+  opacity: 0; visibility: hidden;
+  transform: translateY(-6px) scale(.97);
+  transform-origin: top right;
+  pointer-events: none;
+  transition: opacity .18s, transform .18s, visibility .18s;
+}
+.more-panel.open {
+  opacity: 1; visibility: visible; transform: none; pointer-events: auto;
+}
+/* 纯图标按钮（导出 / 导入 / 上传壁纸） */
+.icon-btn {
+  width: 42px; height: 42px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; cursor: pointer;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .16);
+  transition: background .15s, transform .1s;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, .22); transform: translateY(-1px); }
+.icon-btn svg { width: 19px; height: 19px; display: block; }
+/* “更多”开关按钮（竖排三点图标） */
+.icon-toggle { padding: 9px 13px; display: flex; align-items: center; }
+.icon-toggle svg { width: 18px; height: 18px; display: block; }
+
+/* 按钮基础样式 */
+.btn {
+  padding: 9px 16px; font-size: 14px; color: #fff;
+  border-radius: 999px; border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, .15);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  cursor: pointer; white-space: nowrap;
+  transition: background .2s, transform .1s;
+}
+.btn:hover { background: rgba(255, 255, 255, .3); }
+.btn:active { transform: scale(.96); }
+.btn.primary {
+  background: rgba(255, 255, 255, .92);
+  border-color: rgba(255, 255, 255, .9);
+  color: #1f2430; font-weight: 600;
+}
+.btn.primary:hover { background: #fff; }
+
+/* ============================================================
+   五、时钟 + 搜索框
+   ============================================================ */
+.container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+
+.hero { text-align: center; padding: clamp(28px, 7vh, 60px) 0 8px; }
+
+.clock-time {
+  font-size: clamp(2.1rem, 6vw, 3.2rem);
+  font-weight: 700; letter-spacing: 3px;
+  text-shadow: var(--text-shadow);
+  font-variant-numeric: tabular-nums; /* 秒数跳动时不抖动 */
+}
+.clock-date {
+  margin-top: 8px; font-size: clamp(.9rem, 2.4vw, 1.05rem);
+  opacity: .92; text-shadow: var(--text-shadow);
+}
+
+/* 搜索条：输入框 + 右侧搜索引擎下拉，整体为一颗毛玻璃胶囊 */
+.search-box {
+  max-width: 640px; margin: 26px auto 0;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px 6px 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .1); /* 暗底下稍微加深，保证输入区清晰 */
+}
+.search-box input {
+  flex: 1; min-width: 0;
+  background: transparent; border: 0; outline: 0;
+  color: #fff; font-size: 16px; padding: 11px 4px;
+}
+.search-box input::placeholder { color: rgba(255, 255, 255, .65); }
+
+/* 搜索引擎选择器：去掉独立圆角框，与搜索框融为一体，仅保留文字+原生箭头 */
+.engine-select {
+  padding: 6px 8px;
+  color: #fff; font-size: 14px; cursor: pointer;
+  background: transparent;
+  border: 0; outline: 0;
+}
+.engine-select option { color: #333; }
+
+/* ============================================================
+   六、分类 Tab 标签栏
+   ============================================================ */
+.tabs-bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  margin: 30px 0 18px;
+}
+/* Tab 容器：真实 flex 盒，承载分类 Tab 与末尾的“＋”新增按钮 */
+#tabs {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+}
+.tab {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 16px; border-radius: 999px;
+  font-size: 14px; cursor: grab; user-select: none;
+  transition: background .2s, border-color .2s, opacity .15s;
+}
+.tab:active { cursor: grabbing; }
+.tab:hover { background: rgba(255, 255, 255, .12); }
+.tab.active {
+  background: rgba(255, 255, 255, .18);
+  border-color: rgba(255, 255, 255, .4);
+}
+/* 数字徽标已移除，分类项目数改为悬停时浏览器原生提示“XX 个项目” */
+/* 拖拽排序时的视觉反馈 */
+.tab.dragging { opacity: .35; }                       /* 被拖动的 Tab 变淡 */
+.tab.drop-left::before, .tab.drop-right::after {     /* 放置位置指示线 */
+  content: ''; position: absolute; top: 7px; bottom: 7px;
+  width: 3px; border-radius: 3px;
+  background: #9db4ff;
+  box-shadow: 0 0 10px rgba(157, 180, 255, .9);
+}
+.tab.drop-left::before { left: -7px; }
+.tab.drop-right::after { right: -7px; }
+.tab-add {
+  position: relative;
+  width: 38px; height: 38px; border-radius: 999px;
+  font-size: 20px; line-height: 1; color: #fff;
+  background: transparent; cursor: pointer;
+  border: 1.5px dashed rgba(255, 255, 255, .5);
+  /* 默认隐藏；鼠标悬停在最后一个分类 Tab 上时才浮现 */
+  opacity: 0; pointer-events: none;
+  transition: background .2s, opacity .18s;
+}
+/* 悬停最后一个分类 Tab（div 类型的最后一个，其后才是 button 类型的＋），
+   或焦点/鼠标已移到按钮自身时显示 */
+.tab:last-of-type:hover ~ .tab-add,
+.tab-add:hover,
+.tab-add:focus-visible {
+  opacity: 1; pointer-events: auto;
+}
+/* 向左扩展 14px 隐形热区，覆盖与 Tab 之间的 10px 间隙，
+   保证鼠标从最后一个 Tab 移向按钮过程中不会因中断 hover 而消失 */
+.tab-add::before {
+  content: ''; position: absolute;
+  top: -6px; bottom: -6px; right: 100%; width: 14px;
+}
+.tab-add:hover { background: rgba(255, 255, 255, .14); }
+
+/* ============================================================
+   六（补）、分类右键菜单（桌面右键 / 移动长按触发）
+   ============================================================ */
+.ctx-menu {
+  position: fixed; z-index: 70; display: none;
+  min-width: 140px; padding: 6px; border-radius: 14px;
+  background: rgba(32, 36, 44, .9);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, .15);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .5);
+}
+.ctx-menu.show { display: block; animation: ctxIn .12s ease; }
+@keyframes ctxIn { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+.ctx-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; padding: 9px 12px;
+  border: 0; border-radius: 9px; cursor: pointer;
+  background: transparent; color: #e7eaf0; font-size: 14px;
+}
+.ctx-item:hover { background: rgba(255, 255, 255, .12); }
+.ctx-item.danger { color: #f87171; }
+.ctx-item svg { width: 15px; height: 15px; flex: none; }
+
+/* ============================================================
+   七、收藏卡片网格（响应式：auto-fill 自动分列）
+   ============================================================ */
+.grid {
+  display: grid; gap: 16px; padding-bottom: 70px;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+}
+.card {
+  position: relative;
+  border-radius: 18px; padding: 18px 16px;
+  display: flex; flex-direction: column; gap: 12px;
+  cursor: pointer; overflow: hidden;
+  transition: transform .2s, box-shadow .2s, background .2s;
+}
+.card:hover {
+  transform: translateY(-4px);
+  background: var(--glass-bg-strong);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, .3),
+              inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.card-avatar {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+.card-name {
+  font-size: 15px; font-weight: 600; line-height: 1.4;
+  word-break: break-all; text-shadow: var(--text-shadow);
+}
+.card-host {
+  font-size: 12px; opacity: .72;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 卡片右上角的编辑 / 删除按钮 */
+.card-ops {
+  position: absolute; top: 8px; right: 8px;
+  display: flex; gap: 6px; opacity: 0; transition: opacity .2s;
+}
+.card:hover .card-ops { opacity: 1; }
+.card-op {
+  width: 26px; height: 26px; border-radius: 8px;
+  border: 0; cursor: pointer; font-size: 12px;
+  background: rgba(255, 255, 255, .22); color: #fff;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.card-op:hover { background: rgba(255, 255, 255, .5); color: #333; }
+.card-op.danger:hover { background: rgba(248, 113, 113, .9); color: #fff; }
+
+/* 空状态提示 */
+.empty {
+  display: none; text-align: center;
+  border-radius: 20px; padding: 70px 20px;
+  color: rgba(255, 255, 255, .88); line-height: 2;
+}
+.empty .emoji { font-size: 42px; display: block; margin-bottom: 10px; }
+
+/* ============================================================
+   八、弹窗（新增 / 编辑网址）
+   ============================================================ */
+.modal-mask {
+  position: fixed; inset: 0; z-index: 50;
+  display: none; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(6, 8, 14, .55);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.modal-mask.show { display: flex; }
+.modal {
+  position: relative;
+  width: 100%; max-width: 420px;
+  border-radius: 22px; padding: 26px 24px 22px;
+  background: rgba(34, 38, 47, .88); /* 弹窗用更深更实的玻璃，内容更聚焦 */
+}
+.modal-title { font-size: 18px; margin-bottom: 18px; text-shadow: var(--text-shadow); }
+.modal-x {
+  position: absolute; top: 16px; right: 16px;
+  width: 28px; height: 28px; border-radius: 9px;
+  border: 0; cursor: pointer; color: #fff;
+  background: rgba(255, 255, 255, .18);
+}
+.modal-x:hover { background: rgba(255, 255, 255, .4); color: #333; }
+
+.field { display: block; margin-bottom: 14px; }
+.field > span { display: block; font-size: 13px; margin: 0 2px 6px; opacity: .92; }
+.field input, .field select {
+  width: 100%; padding: 11px 14px; border-radius: 12px;
+  font-size: 15px; color: #fff; outline: 0;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .28);
+  transition: border .2s, background .2s;
+}
+.field input:focus, .field select:focus {
+  border-color: rgba(255, 255, 255, .7);
+  background: rgba(255, 255, 255, .22);
+}
+.field input::placeholder { color: rgba(255, 255, 255, .6); }
+.field select option { color: #333; }
+
+.error-tip { min-height: 18px; font-size: 13px; color: #fecaca; margin-bottom: 6px; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
+
+/* ============================================================
+   九、轻提示 Toast
+   ============================================================ */
+.toast {
+  position: fixed; left: 50%; bottom: 42px; z-index: 60;
+  transform: translateX(-50%) translateY(16px);
+  padding: 11px 22px; border-radius: 999px;
+  background: rgba(28, 32, 40, .9); color: #fff; font-size: 14px;
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, .22);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ============================================================
+   十、小屏手机适配
+   ============================================================ */
+@media (max-width: 560px) {
+  .topbar-inner { padding: 10px 14px; }
+  .brand { width: 100%; }
+  .btn { padding: 8px 12px; font-size: 13px; }
+  .container { padding: 0 14px; }
+  .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+  .card { padding: 14px 12px; }
+  /* 触屏无 hover：卡片操作按钮常显；“＋”新建分类按钮也常显 */
+  .card-ops { opacity: .85; }
+  .tab-add { opacity: 1; pointer-events: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- 背景层（默认渐变 / 用户壁纸）与压暗遮罩 -->
+<div class="bg" id="bg"></div>
+<div class="bg-overlay"></div>
+
+<!-- ========== 顶部工具栏：左上角可改名，右上角折叠操作 ========== -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <!-- 点击名称可就地修改，结果存入 localStorage -->
+    <div class="brand" id="brand" title="点击修改名称">
+      <span>✦</span>
+      <span id="brand-name">我的网址收藏夹</span>
+      <span class="brand-hint">✎</span>
+    </div>
+    <div class="actions">
+      <!-- 导出 / 导入 / 上传壁纸：默认收起，点“三点”按钮后展开为图标 -->
+      <div class="more-wrap">
+        <div class="more-panel glass" id="more-panel">
+          <button class="icon-btn" id="btn-export" title="导出为 CSV（可用 Excel 打开）" aria-label="导出">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="btn-import" title="从 CSV 文件导入" aria-label="导入">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </button>
+          <button class="icon-btn" id="btn-wallpaper" title="上传背景壁纸" aria-label="上传壁纸">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>
+            </svg>
+          </button>
+        </div>
+        <button class="btn icon-toggle" id="btn-more" title="更多操作（导出 / 导入 / 壁纸）" aria-label="更多操作">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/>
+          </svg>
+        </button>
+      </div>
+      <button class="btn" id="btn-add">＋ 新增网址</button>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- ========== 实时时钟（每秒刷新） ========== -->
+  <section class="hero">
+    <div class="clock-time" id="clock-time">--:--:--</div>
+    <div class="clock-date" id="clock-date">加载中…</div>
+
+    <!-- 全局搜索框：右侧下拉切换搜索引擎，回车跳转 -->
+    <div class="search-box glass">
+      <input type="text" id="search-input" placeholder="输入关键词，回车搜索…" autocomplete="off">
+      <select class="engine-select" id="engine-select" title="选择搜索引擎"></select>
+    </div>
+  </section>
+
+  <!-- ========== 分类 Tab 标签栏（＋按钮在容器末尾，默认隐藏、悬停末位 Tab 浮现） ========== -->
+  <nav class="tabs-bar">
+    <div id="tabs">
+      <button type="button" class="tab-add" id="tab-add" title="新建分类">＋</button>
+    </div>
+  </nav>
+
+  <!-- ========== 收藏卡片网格 / 空状态 ========== -->
+  <section class="grid" id="grid"></section>
+  <div class="empty glass" id="empty">
+    <span class="emoji">🔖</span>
+    该分类下还没有收藏<br>点击右上角「新增网址」开始添加吧
+  </div>
+
+</main>
+
+<!-- ========== 新增 / 编辑网址弹窗 ========== -->
+<div class="modal-mask" id="modal-mask">
+  <div class="modal glass" role="dialog" aria-modal="true">
+    <button class="modal-x" id="modal-close" title="关闭">✕</button>
+    <h3 class="modal-title" id="modal-title">新增网址</h3>
+
+    <label class="field">
+      <span>网页名称</span>
+      <input type="text" id="input-name" maxlength="40" placeholder="例如：哔哩哔哩">
+    </label>
+
+    <label class="field">
+      <span>网页 URL（需以 http:// 或 https:// 开头）</span>
+      <input type="text" id="input-url" placeholder="https://www.bilibili.com">
+    </label>
+
+    <label class="field">
+      <span>所属分类</span>
+      <select id="input-category"></select>
+    </label>
+
+    <div class="error-tip" id="error-tip"></div>
+
+    <div class="modal-actions">
+      <button class="btn" id="btn-cancel">取消</button>
+      <button class="btn primary" id="btn-submit">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 分类右键菜单（桌面右键 / 手机长按分类 Tab 触发） -->
+<div class="ctx-menu" id="ctx-menu">
+  <button class="ctx-item" data-act="rename">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+    </svg>重命名分类
+  </button>
+  <button class="ctx-item danger" data-act="delete">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+    </svg>删除分类
+  </button>
+</div>
+
+<!-- 轻提示 -->
+<div class="toast" id="toast"></div>
+
+<!-- 隐藏的文件选择框：导入 CSV / 上传壁纸 -->
+<input type="file" id="file-import" accept=".csv,text/csv" hidden>
+<input type="file" id="file-wallpaper" accept="image/*" hidden>
+
+<script>
+/* ================================================================
+ * 网址收藏夹 v1 —— 全部逻辑内联于此
+ * 模块划分：
+ *   1. 常量与全局状态（localStorage 数据层）
+ *   2. 工具函数
+ *   3. 实时时钟
+ *   4. 搜索引擎
+ *   5. 分类 Tab 增删改与渲染
+ *   6. 收藏卡片渲染、新增 / 编辑弹窗
+ *   7. CSV 导入 / 导出
+ *   8. 壁纸上传
+ *   9. 初始化与事件绑定
+ * ================================================================ */
+(function () {
+  'use strict';
+
+  /* ============================================================
+   * 1. 常量与全局状态
+   * ============================================================ */
+
+  // localStorage 存储键名（所有分类、网址、设置都在这一个键里）
+  var STORAGE_KEY = 'glass_bookmarks_v1';
+
+  // 支持的搜索引擎：name 为展示名，tpl 为搜索地址模板（关键词拼在末尾）
+  var ENGINES = [
+    { id: 'bing',     name: 'Bing',     tpl: 'https://www.bing.com/search?q=' },
+    { id: 'google',   name: 'Google',   tpl: 'https://www.google.com/search?q=' },
+    { id: 'baidu',    name: '百度',      tpl: 'https://www.baidu.com/s?wd=' },
+    { id: 'bilibili', name: 'Bilibili', tpl: 'https://search.bilibili.com/all?keyword=' }
+  ];
+
+  // 全局状态：categories 分类数组、bookmarks 网址数组、settings 用户设置
+  var state = loadState();
+
+  // 当前选中的分类 id；editingId 非空时弹窗处于“编辑”模式
+  var currentCategoryId = state.categories[0].id;
+  var editingId = null;
+
+  /** 从 localStorage 读取数据；损坏或首次访问时回退到默认结构 */
+  function loadState() {
+    var data;
+    try { data = JSON.parse(localStorage.getItem(STORAGE_KEY)); } catch (e) { data = null; }
+    data = data || {};
+
+    var categories = Array.isArray(data.categories) && data.categories.length
+      ? data.categories
+      : [{ id: 'default', name: '默认' }];
+
+    // 兜底：任何情况下都必须存在“默认”分类
+    if (!categories.some(function (c) { return c.id === 'default'; })) {
+      categories.unshift({ id: 'default', name: '默认' });
+    }
+
+    var validIds = categories.map(function (c) { return c.id; });
+    var bookmarks = (Array.isArray(data.bookmarks) ? data.bookmarks : []).filter(function (b) {
+      return b && b.name && b.url && validIds.indexOf(b.categoryId) !== -1;
+    });
+
+    return {
+      categories: categories,
+      bookmarks: bookmarks,
+      // title 为用户自定义的左上角站点名称
+      settings: Object.assign({ engine: 'bing', wallpaper: '', title: '我的网址收藏夹' }, data.settings || {})
+    };
+  }
+
+  /** 保存到 localStorage；返回是否成功（壁纸过大可能触发配额错误） */
+  function persist() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      return true;
+    } catch (e) {
+      toast('保存失败：浏览器本地存储空间不足，可尝试更换更小的壁纸图片');
+      return false;
+    }
+  }
+
+  /* ============================================================
+   * 2. 工具函数
+   * ============================================================ */
+
+  function $(id) { return document.getElementById(id); }
+
+  /** 生成简单唯一 id */
+  function uid(prefix) {
+    return (prefix || 'id') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  /** URL 合法性校验：必须是 http/https 协议且主机名合法，不合法返回 null */
+  function normalizeUrl(raw) {
+    var s = String(raw || '').trim();
+    if (!/^https?:\/\//i.test(s)) return null; // 缺少 http(s) 协议直接拦截
+    try {
+      var u = new URL(s);
+      if (!/^https?:$/.test(u.protocol)) return null;
+      // 主机名至少包含一个点（如 baidu.com），localhost 放行
+      var hostOk = /^[\w-]+(\.[\w-]+)+/.test(u.hostname) || u.hostname === 'localhost';
+      return hostOk ? u.href : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 从完整 URL 中提取展示用主机名，如 https://www.bilibili.com/x → bilibili.com */
+  function hostOf(url) {
+    try { return new URL(url).hostname.replace(/^www\./, ''); }
+    catch (e) { return url; }
+  }
+
+  /** 根据字符串生成稳定的色相值，用作卡片首字母头像底色 */
+  function hueOf(str) {
+    var h = 0;
+    for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) % 360;
+    return h;
+  }
+
+  function pad2(n) { return String(n).padStart(2, '0'); }
+
+  /** 日期戳，用于导出文件名，如 20260925 */
+  function dateStamp() {
+    var d = new Date();
+    return d.getFullYear() + pad2(d.getMonth() + 1) + pad2(d.getDate());
+  }
+
+  /* ============================================================
+   * 3. 实时时钟：年月日 + 星期，每秒更新
+   * ============================================================ */
+
+  var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
+
+  function updateClock() {
+    var d = new Date();
+    $('clock-time').textContent = pad2(d.getHours()) + ':' + pad2(d.getMinutes()) + ':' + pad2(d.getSeconds());
+    $('clock-date').textContent =
+      d.getFullYear() + '年' + (d.getMonth() + 1) + '月' + d.getDate() + '日 星期' + WEEK[d.getDay()];
+  }
+
+  /* ============================================================
+   * 4. 搜索引擎：回车时用当前选中的引擎打开搜索结果
+   * ============================================================ */
+
+  function doSearch() {
+    var kw = $('search-input').value.trim();
+    if (!kw) { $('search-input').focus(); return; }
+    var engine = ENGINES.filter(function (e) { return e.id === $('engine-select').value; })[0] || ENGINES[0];
+    window.open(engine.tpl + encodeURIComponent(kw), '_blank', 'noopener');
+  }
+
+  /* ============================================================
+   * 5. 分类 Tab：渲染 + 新建 / 重命名 / 删除
+   * ============================================================ */
+
+  function countBookmarks(categoryId) {
+    return state.bookmarks.filter(function (b) { return b.categoryId === categoryId; }).length;
+  }
+
+  /** 根据名称查找分类（用于导入时归类） */
+  function findCategoryByName(name) {
+    return state.categories.filter(function (c) { return c.name === name; })[0] || null;
+  }
+
+  /** 全量重绘分类 Tab（数据驱动渲染，避免 DOM 与状态不一致） */
+  function renderTabs() {
+    var bar = $('tabs');
+    // “＋”按钮静态位于容器末尾，重绘前先取出，渲染完再放回，避免被清空
+    var addBtn = $('tab-add');
+    bar.innerHTML = '';
+
+    state.categories.forEach(function (cat) {
+      var tab = document.createElement('div');
+      tab.className = 'tab glass' + (cat.id === currentCategoryId ? ' active' : '');
+      tab.draggable = true; // 支持鼠标拖拽排序
+      tab.dataset.catId = cat.id;
+
+      var nameEl = document.createElement('span');
+      nameEl.textContent = cat.name;
+      tab.appendChild(nameEl);
+
+      // 数字徽标不再常驻显示；鼠标悬停 Tab 时以系统提示展示项目数
+      tab.title = countBookmarks(cat.id) + ' 个项目';
+
+      // 点击切换分类；若刚结束长按弹出菜单则忽略本次点击
+      tab.onclick = function () {
+        if (longPressFired) { longPressFired = false; return; }
+        currentCategoryId = cat.id;
+        renderAll();
+      };
+
+      // —— 右键（桌面）/ 长按（手机）弹出“重命名 / 删除”菜单 ——
+      tab.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openCtxMenu(e.clientX, e.clientY, cat.id);
+      });
+      bindLongPress(tab, function (x, y) { openCtxMenu(x, y, cat.id); });
+
+      // —— HTML5 拖拽排序：记录被拖拽的分类 id ——
+      tab.addEventListener('dragstart', function (e) {
+        dragSrcId = cat.id;
+        tab.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        try { e.dataTransfer.setData('text/plain', cat.id); } catch (err) {}
+      });
+      tab.addEventListener('dragend', function () {
+        dragSrcId = null;
+        clearDropMarks();
+        renderTabs(); // 重绘清除 dragging 态
+      });
+      // 拖过某个 Tab：根据鼠标在其左/右半侧显示放置指示线
+      tab.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        if (!dragSrcId || dragSrcId === cat.id) return;
+        var rect = tab.getBoundingClientRect();
+        var before = e.clientX < rect.left + rect.width / 2;
+        markDrop(tab, before);
+        e.dataTransfer.dropEffect = 'move';
+      });
+      tab.addEventListener('dragleave', function (e) {
+        // 只有真正离开该 Tab 时才清除它自己的指示线
+        if (!tab.contains(e.relatedTarget)) {
+          tab.classList.remove('drop-left', 'drop-right');
+        }
+      });
+      // 松手：把被拖拽分类移动到指示位置
+      tab.addEventListener('drop', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!dragSrcId || dragSrcId === cat.id) { clearDropMarks(); return; }
+
+        var before = tab.classList.contains('drop-left');
+        reorderCategories(dragSrcId, cat.id, before);
+        dragSrcId = null;
+        clearDropMarks();
+      });
+
+      bar.appendChild(tab);
+    });
+
+    // “＋”按钮始终保持在所有分类 Tab 的最末尾
+    bar.appendChild(addBtn);
+  }
+
+  /* ------------------------------------------------------------
+   * 5.1 分类右键菜单（桌面右键 / 移动长按）
+   * ------------------------------------------------------------ */
+
+  var ctxCategoryId = null; // 菜单当前作用的分类 id
+
+  /** 在 (x, y) 处弹出右键菜单；“默认”分类受保护，不弹菜单 */
+  function openCtxMenu(x, y, categoryId) {
+    if (categoryId === 'default') return;
+    ctxCategoryId = categoryId;
+
+    var menu = $('ctx-menu');
+    menu.classList.add('show');
+
+    // 先显示再测量尺寸，避免菜单超出屏幕右下边界
+    var r = menu.getBoundingClientRect();
+    var left = Math.max(8, Math.min(x, window.innerWidth - r.width - 8));
+    var top = Math.max(8, Math.min(y, window.innerHeight - r.height - 8));
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+  }
+
+  function closeCtxMenu() {
+    $('ctx-menu').classList.remove('show');
+    ctxCategoryId = null;
+  }
+
+  /** 手机长按 500ms 触发回调（参数为手指坐标），期间移动或松手则取消 */
+  var longPressFired = false;
+  function bindLongPress(el, onLongPress) {
+    var timer = null;
+    el.addEventListener('touchstart', function (e) {
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0];
+      longPressFired = false;
+      timer = setTimeout(function () {
+        longPressFired = true;
+        onLongPress(t.clientX, t.clientY);
+        if (navigator.vibrate) navigator.vibrate(15); // 支持振动的手机给轻微反馈
+      }, 500);
+    }, { passive: true });
+    el.addEventListener('touchmove', function () { clearTimeout(timer); });
+    el.addEventListener('touchend', function () { clearTimeout(timer); });
+    el.addEventListener('touchcancel', function () { clearTimeout(timer); });
+  }
+
+  /* ------------------------------------------------------------
+   * 5.2 分类拖拽排序
+   * ------------------------------------------------------------ */
+
+  var dragSrcId = null; // 当前被拖拽的分类 id
+
+  /** 清除所有 Tab 上的放置指示线 */
+  function clearDropMarks() {
+    var all = $('tabs').querySelectorAll('.tab');
+    Array.prototype.forEach.call(all, function (t) {
+      t.classList.remove('drop-left', 'drop-right');
+    });
+  }
+
+  /** 在目标 Tab 左/右侧显示放置指示线（同时保证只有一条） */
+  function markDrop(targetEl, before) {
+    clearDropMarks();
+    targetEl.classList.add(before ? 'drop-left' : 'drop-right');
+  }
+
+  /** 将 srcId 分类移动到 targetId 分类的前面(before=true)或后面，并持久化 */
+  function reorderCategories(srcId, targetId, before) {
+    var fromIdx = state.categories.findIndex(function (c) { return c.id === srcId; });
+    if (fromIdx === -1) return;
+    var moved = state.categories.splice(fromIdx, 1)[0];
+
+    var toIdx = state.categories.findIndex(function (c) { return c.id === targetId; });
+    if (toIdx === -1) { state.categories.splice(fromIdx, 0, moved); return; }
+    state.categories.splice(before ? toIdx : toIdx + 1, 0, moved);
+
+    persist();
+    renderTabs();
+  }
+
+  /** 新建分类（浏览器原生输入框，简单可靠） */
+  function addCategory() {
+    var name = window.prompt('请输入新分类名称：');
+    if (name === null) return;
+    name = name.trim();
+    if (!name) { toast('分类名称不能为空'); return; }
+    if (findCategoryByName(name)) { toast('已存在同名分类'); return; }
+
+    var cat = { id: uid('cat'), name: name };
+    state.categories.push(cat);
+    currentCategoryId = cat.id; // 新建后自动切换过去
+    persist();
+    renderAll();
+  }
+
+  /** 重命名分类 */
+  function renameCategory(id) {
+    var cat = state.categories.filter(function (c) { return c.id === id; })[0];
+    if (!cat) return;
+    var name = window.prompt('请输入新的分类名称：', cat.name);
+    if (name === null) return;
+    name = name.trim();
+    if (!name) { toast('分类名称不能为空'); return; }
+    if (state.categories.some(function (c) { return c.id !== id && c.name === name; })) {
+      toast('已存在同名分类'); return;
+    }
+    cat.name = name;
+    persist();
+    renderAll();
+  }
+
+  /** 删除分类：其下网址自动移入“默认”分类，避免数据丢失 */
+  function deleteCategory(id) {
+    if (id === 'default') return;
+    var cat = state.categories.filter(function (c) { return c.id === id; })[0];
+    var n = countBookmarks(id);
+    var ok = window.confirm(
+      '确定删除分类「' + cat.name + '」吗？\n该分类下的 ' + n + ' 个网址将自动移入「默认」分类。'
+    );
+    if (!ok) return;
+
+    state.bookmarks.forEach(function (b) {
+      if (b.categoryId === id) b.categoryId = 'default';
+    });
+    state.categories = state.categories.filter(function (c) { return c.id !== id; });
+    if (currentCategoryId === id) currentCategoryId = 'default';
+    persist();
+    renderAll();
+    toast('分类已删除');
+  }
+
+  /* ============================================================
+   * 6. 收藏卡片：渲染网格 + 新增 / 编辑弹窗
+   * ============================================================ */
+
+  /** 全量重绘当前分类下的卡片 */
+  function renderGrid() {
+    var grid = $('grid');
+    grid.innerHTML = '';
+
+    var list = state.bookmarks.filter(function (b) { return b.categoryId === currentCategoryId; });
+
+    list.forEach(function (b) {
+      var card = document.createElement('div');
+      card.className = 'card glass';
+
+      // 首字母头像：底色由名称哈希得到渐变色，纯 CSS 无外部请求
+      var initial = (b.name.trim().charAt(0) || '★').toUpperCase();
+      var h = hueOf(b.name);
+      var avatar = document.createElement('div');
+      avatar.className = 'card-avatar';
+      avatar.style.background = 'linear-gradient(135deg, hsl(' + h + ',82%,68%), hsl(' + (h + 40) + ',82%,56%))';
+      avatar.textContent = initial;
+
+      var nameEl = document.createElement('div');
+      nameEl.className = 'card-name';
+      nameEl.textContent = b.name;
+
+      var hostEl = document.createElement('div');
+      hostEl.className = 'card-host';
+      hostEl.textContent = hostOf(b.url);
+
+      card.appendChild(avatar);
+      card.appendChild(nameEl);
+      card.appendChild(hostEl);
+
+      // 右上角：编辑 / 删除（阻止冒泡，避免触发卡片点击）
+      var ops = document.createElement('div');
+      ops.className = 'card-ops';
+
+      var btnEdit = document.createElement('button');
+      btnEdit.className = 'card-op';
+      btnEdit.title = '编辑';
+      btnEdit.textContent = '✎';
+      btnEdit.onclick = function (e) { e.stopPropagation(); openModal(b); };
+
+      var btnDel = document.createElement('button');
+      btnDel.className = 'card-op danger';
+      btnDel.title = '删除';
+      btnDel.textContent = '✕';
+      btnDel.onclick = function (e) {
+        e.stopPropagation();
+        if (window.confirm('确定删除「' + b.name + '」吗？')) {
+          state.bookmarks = state.bookmarks.filter(function (x) { return x.id !== b.id; });
+          persist();
+          renderAll();
+        }
+      };
+
+      ops.appendChild(btnEdit);
+      ops.appendChild(btnDel);
+      card.appendChild(ops);
+
+      // 点击卡片在新标签页打开网址
+      card.onclick = function () { window.open(b.url, '_blank', 'noopener'); };
+
+      grid.appendChild(card);
+    });
+
+    // 列表为空时显示空状态
+    $('empty').style.display = list.length ? 'none' : 'block';
+  }
+
+  function renderAll() {
+    renderTabs();
+    renderGrid();
+  }
+
+  /** 打开弹窗；传 bookmark 对象为编辑模式，传 null 为新增模式 */
+  function openModal(bookmark) {
+    editingId = bookmark ? bookmark.id : null;
+
+    // 填充分类下拉
+    var select = $('input-category');
+    select.innerHTML = '';
+    state.categories.forEach(function (c) {
+      var op = document.createElement('option');
+      op.value = c.id;
+      op.textContent = c.name;
+      select.appendChild(op);
+    });
+
+    $('modal-title').textContent = bookmark ? '编辑网址' : '新增网址';
+    $('input-name').value = bookmark ? bookmark.name : '';
+    $('input-url').value = bookmark ? bookmark.url : '';
+    select.value = bookmark ? bookmark.categoryId : currentCategoryId;
+    $('error-tip').textContent = '';
+
+    $('modal-mask').classList.add('show');
+    setTimeout(function () { $('input-name').focus(); }, 60);
+  }
+
+  function closeModal() {
+    $('modal-mask').classList.remove('show');
+    editingId = null;
+  }
+
+  /** 弹窗“保存”：统一的名称 / URL 校验，通过后新增或更新 */
+  function submitBookmark() {
+    var name = $('input-name').value.trim();
+    var url = normalizeUrl($('input-url').value);
+    var categoryId = $('input-category').value;
+    var tip = $('error-tip');
+
+    if (!name) {
+      tip.textContent = '请填写网页名称';
+      $('input-name').focus();
+      return;
+    }
+    if (!url) {
+      // 明确提示缺少协议的常见错误并拦截提交
+      tip.textContent = 'URL 不合法：需以 http:// 或 https:// 开头，例如 https://www.bilibili.com';
+      $('input-url').focus();
+      return;
+    }
+
+    if (editingId) {
+      // 编辑模式：更新原记录
+      var target = state.bookmarks.filter(function (b) { return b.id === editingId; })[0];
+      if (target) { target.name = name; target.url = url; target.categoryId = categoryId; }
+    } else {
+      // 新增模式
+      state.bookmarks.push({ id: uid('bm'), name: name, url: url, categoryId: categoryId });
+    }
+
+    persist();
+    currentCategoryId = categoryId; // 保存后跳到它所在的分类
+    renderAll();
+    closeModal();
+    toast(editingId ? '已保存修改' : '收藏成功');
+  }
+
+  /* ============================================================
+   * 7. CSV 批量导入 / 导出
+   *    导出格式：分类,名称,链接（带 BOM，Excel 可直接打开不乱码）
+   * ============================================================ */
+
+  /** 单个 CSV 字段转义：含逗号、引号或换行时用双引号包裹 */
+  function csvEscape(v) {
+    v = String(v == null ? '' : v);
+    return /[",\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  }
+
+  function exportCSV() {
+    if (!state.bookmarks.length) { toast('还没有可导出的收藏'); return; }
+
+    var rows = [['分类', '名称', '链接']];
+    state.bookmarks.forEach(function (b) {
+      var cat = state.categories.filter(function (c) { return c.id === b.categoryId; })[0];
+      rows.push([cat ? cat.name : '默认', b.name, b.url]);
+    });
+
+    // \uFEFF 为 UTF-8 BOM，保证 Excel 打开中文不乱码；换行用 \r\n 兼容 Excel
+    var csv = '﻿' + rows.map(function (r) { return r.map(csvEscape).join(','); }).join('\r\n');
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+
+    // 用临时 <a> 触发浏览器下载
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bookmarks_' + dateStamp() + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    toast('已导出 ' + state.bookmarks.length + ' 条收藏');
+  }
+
+  /**
+   * 轻量 CSV 解析器：支持双引号包裹、引号转义（""）、字段内换行
+   * 返回二维数组（已丢弃全空行）
+   */
+  function parseCSV(text) {
+    var rows = [], row = [], field = '', inQuotes = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else { inQuotes = false; }
+        } else {
+          field += c;
+        }
+      } else if (c === '"') {
+        inQuotes = true;
+      } else if (c === ',') {
+        row.push(field); field = '';
+      } else if (c === '\n') {
+        row.push(field); rows.push(row); row = []; field = '';
+      } else if (c !== '\r') {
+        field += c;
+      }
+    }
+    if (field !== '' || row.length) { row.push(field); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return x.trim() !== ''; }); });
+  }
+
+  /** 读取用户选择的 CSV 文件，校验后追加到对应分类（不存在则自动新建） */
+  function handleImportFile(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var rows = parseCSV(String(reader.result));
+
+      // 自动识别并跳过表头（首行包含“链接”或 URL 字样视为表头）
+      var hasHeader = false;
+      if (rows.length && /链接|^url$/i.test(rows[0].join(','))) {
+        hasHeader = true;
+        rows.shift();
+      }
+
+      var okCount = 0;
+      var fails = [];
+
+      rows.forEach(function (cells, i) {
+        var lineNo = (hasHeader ? 2 : 1) + i; // 报错时的行号
+        var catName = (cells[0] || '').trim() || '默认';
+        var name = (cells[1] || '').trim();
+        var url = normalizeUrl(cells[2]);
+
+        // 名称为空或 URL 不合法 → 记录失败原因并拦截该行
+        if (!name || !url) {
+          fails.push('第 ' + lineNo + ' 行：名称为空或 URL 不合法（需 http/https 开头）');
+          return;
+        }
+
+        // 追加到对应分类；分类不存在则自动创建
+        var cat = findCategoryByName(catName);
+        if (!cat) {
+          cat = { id: uid('cat'), name: catName };
+          state.categories.push(cat);
+        }
+        state.bookmarks.push({ id: uid('bm'), name: name, url: url, categoryId: cat.id });
+        okCount++;
+      });
+
+      if (okCount) { persist(); renderAll(); }
+
+      // 汇总导入结果（失败明细最多展示 5 条）
+      var msg = '导入完成：成功 ' + okCount + ' 条，失败 ' + fails.length + ' 条';
+      if (fails.length) msg += '\n\n' + fails.slice(0, 5).join('\n') + (fails.length > 5 ? '\n…' : '');
+      window.alert(msg);
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  /* ============================================================
+   * 8. 壁纸上传：FileReader 读图片 → Canvas 压缩 → dataURL 存入 localStorage
+   * ============================================================ */
+
+  function applyWallpaper() {
+    var bg = $('bg');
+    if (state.settings.wallpaper) {
+      bg.classList.add('has-photo');
+      bg.style.backgroundImage = 'url("' + state.settings.wallpaper + '")';
+    } else {
+      bg.classList.remove('has-photo');
+      bg.style.backgroundImage = '';
+    }
+  }
+
+  function handleWallpaperFile(file) {
+    if (!file || !/^image\//.test(file.type)) { toast('请选择图片文件'); return; }
+
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        // 大图等比缩放到 1920px 宽并转成 JPEG，避免超出 localStorage 容量
+        var MAX_W = 1920;
+        var w = img.width, h = img.height;
+        if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#1a1f3c'; // JPEG 不支持透明，先铺深色底
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        state.settings.wallpaper = dataUrl;
+        if (persist()) {
+          applyWallpaper();
+          toast('壁纸设置成功');
+        } else {
+          state.settings.wallpaper = ''; // 存储失败则回滚
+        }
+      };
+      img.onerror = function () { toast('图片读取失败，请换一张试试'); };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  /* ============================================================
+   * Toast 轻提示
+   * ============================================================ */
+
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2200);
+  }
+
+  /* ============================================================
+   * 8.5 左上角站点名称：点击后就地变成输入框
+   *     回车 / 失焦保存，Esc 取消；结果存入 settings.title
+   * ============================================================ */
+
+  var brandEditing = false;
+  var brandSuppressUntil = 0; // 编辑框刚失焦后的短暂时间内，忽略 brand 点击以免立刻重开
+  function editBrandTitle() {
+    if (brandEditing) return;
+    brandEditing = true;
+
+    var nameEl = $('brand-name');
+    var input = document.createElement('input');
+    input.className = 'brand-input';
+    input.maxLength = 20;
+    input.value = state.settings.title || '我的网址收藏夹';
+    input.setAttribute('aria-label', '修改站点名称');
+
+    nameEl.style.display = 'none';
+    nameEl.parentNode.insertBefore(input, nameEl);
+    input.focus();
+    input.select();
+
+    var finished = false;
+    function finish(save) {
+      if (finished) return;
+      finished = true;
+      var v = input.value.trim();
+      if (save && v && v !== state.settings.title) {
+        state.settings.title = v;
+        persist();
+        nameEl.textContent = v;
+        document.title = v; // 同步浏览器标签页标题
+        toast('名称已更新');
+      }
+      input.remove();
+      nameEl.style.display = '';
+      brandEditing = false;
+      brandSuppressUntil = Date.now() + 180;
+    }
+
+    input.addEventListener('blur', function () { finish(true); });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { finish(false); }
+    });
+    // 阻止点击输入框本身冒泡到 brand 导致重复触发
+    input.addEventListener('click', function (e) { e.stopPropagation(); });
+  }
+
+  /* ============================================================
+   * 9. 初始化：填充搜索引擎、绑定事件、首次渲染
+   * ============================================================ */
+
+  function init() {
+    // 壁纸恢复
+    applyWallpaper();
+
+    // 恢复用户自定义的站点名称（左上角 + 浏览器标签页标题）
+    var initTitle = state.settings.title || '我的网址收藏夹';
+    $('brand-name').textContent = initTitle;
+    document.title = initTitle;
+    // 点击左上角名称就地改名
+    $('brand').addEventListener('click', function () {
+      if (Date.now() < brandSuppressUntil) return;
+      editBrandTitle();
+    });
+
+    // —— “更多操作”折叠面板：三点按钮展开 / 再次点击或点外部收起 ——
+    var morePanel = $('more-panel');
+    $('btn-more').addEventListener('click', function (e) {
+      e.stopPropagation();
+      morePanel.classList.toggle('open');
+    });
+    morePanel.addEventListener('click', function (e) {
+      e.stopPropagation();
+      // 点任意图标按钮执行动作后自动收起
+      if (e.target.closest('.icon-btn')) morePanel.classList.remove('open');
+    });
+    document.addEventListener('click', function () {
+      morePanel.classList.remove('open');
+    });
+
+    // 搜索引擎下拉填充 + 读取上次选择
+    var engineSelect = $('engine-select');
+    ENGINES.forEach(function (en) {
+      var op = document.createElement('option');
+      op.value = en.id;
+      op.textContent = en.name;
+      engineSelect.appendChild(op);
+    });
+    engineSelect.value = state.settings.engine;
+    engineSelect.addEventListener('change', function () {
+      state.settings.engine = engineSelect.value;
+      persist();
+    });
+
+    // 搜索框回车触发搜索
+    $('search-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') doSearch();
+    });
+
+    // 顶部按钮（导出 / 导入 / 壁纸位于折叠面板内，id 保持不变）
+    $('btn-add').onclick = function () { openModal(null); };
+    $('btn-export').onclick = exportCSV;
+    $('btn-import').onclick = function () { $('file-import').click(); };
+    $('btn-wallpaper').onclick = function () { $('file-wallpaper').click(); };
+
+    // 文件选择：导入 CSV
+    $('file-import').addEventListener('change', function (e) {
+      if (e.target.files[0]) handleImportFile(e.target.files[0]);
+      e.target.value = ''; // 重置后才能再次选择同一个文件
+    });
+
+    // 文件选择：上传壁纸
+    $('file-wallpaper').addEventListener('change', function (e) {
+      if (e.target.files[0]) handleWallpaperFile(e.target.files[0]);
+      e.target.value = '';
+    });
+
+    // 新建分类
+    $('tab-add').onclick = addCategory;
+
+    // —— 分类右键菜单：事件委托处理“重命名 / 删除” ——
+    $('ctx-menu').addEventListener('click', function (e) {
+      var item = e.target.closest('.ctx-item');
+      if (!item || !ctxCategoryId) return;
+      var id = ctxCategoryId;     // 先取 id，关闭菜单会清空它
+      var act = item.dataset.act;
+      closeCtxMenu();
+      if (act === 'rename') renameCategory(id);
+      if (act === 'delete') deleteCategory(id);
+    });
+    // 左键点击页面任意处、滚动、窗口缩放时关闭右键菜单
+    document.addEventListener('click', closeCtxMenu);
+    window.addEventListener('resize', closeCtxMenu);
+    window.addEventListener('scroll', closeCtxMenu, true);
+
+    // 弹窗相关事件
+    $('btn-submit').onclick = submitBookmark;
+    $('btn-cancel').onclick = closeModal;
+    $('modal-close').onclick = closeModal;
+    $('modal-mask').addEventListener('click', function (e) {
+      if (e.target === this) closeModal(); // 点击遮罩空白处关闭
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      closeModal();      // Esc 关闭网址弹窗
+      closeCtxMenu();    // 同时关闭分类右键菜单与更多面板
+      morePanel.classList.remove('open');
+    });
+
+    // 首次渲染 + 启动时钟
+    renderAll();
+    updateClock();
+    setInterval(updateClock, 1000);
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
